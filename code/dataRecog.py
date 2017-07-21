@@ -13,7 +13,7 @@ imgsize = 28
 epoch = 20
 batch_size = 100
 hidden_size = 500
-hidden_size2 = 300
+hidden_size2 = 300  
 
 def write_res(arr):
     f = open(res_path,'w',encoding = 'utf-8')
@@ -63,13 +63,13 @@ def readTestData():
     pic_arr = np.array(pic_arr)    
     return pic_arr
     
-def weight_variable(stddev_,shape):
+def weight_variable(shape):
     # w = tf.Variable(tf.zeros(shape))
     # w = tf.truncated_normal(shape, stddev = stddev_)
     w = tf.Variable(tf.random_normal(shape,seed=1))
     return w
     
-def bias_variable(v,shape_):
+def bias_variable(shape_):
     # b = tf.Variable(tf.zeros(shape))
     # b = tf.Variable(tf.constant(v,shape = shape))
     b = tf.Variable(tf.random_normal(shape = shape_,seed=1))
@@ -178,6 +178,74 @@ def MLP():
     save_path = saver.save(sess, pardir+'/model/nn.ckpt')       
     sess.close()
     
+def conv2d(x, W):
+    return tf.nn.conv2d(x, W, strides=[1, 1, 1, 1], padding='SAME')
+
+def max_pool(x):
+    return tf.nn.max_pool(x, ksize=[1, 2, 2, 1],strides=[1, 2, 2, 1], padding='SAME')
+    
+def conv():
+    x = tf.placeholder(tf.float32,[None,imgsize*imgsize],name = 'x')
+    y_ = tf.placeholder(tf.float32,[None, 10],name = 'y')
+    x_img = tf.reshape(x,[-1,imgsize,imgsize,1])
+    w_conv1 = weight_variable([5,5,1,32]) 
+    b_conv1 = bias_variable([32])
+    h_conv1 = tf.nn.relu(conv2d(x_img, w_conv1)+b_conv1)
+    h_pool1 = max_pool(h_conv1)
+    w_conv2 = weight_variable([5,5,32,64])
+    b_conv2 = bias_variable([64])
+    h_conv2 = tf.nn.relu(conv2d(h_pool1, w_conv2)+b_conv2)
+    h_pool2 = max_pool(h_conv2)
+    w_fc1 = weight_variable([7*7*64, 1024])
+    b_fc1 = bias_variable([1024])
+    h_pool2_flat = tf.reshape(h_pool2, [-1,7*7*64])
+    h_fc1 = tf.nn.relu(tf.matmul(h_pool2_flat, w_fc1)+b_fc1)
+    keep_prob = tf.placeholder(tf.float32)
+    h_fc1_dropout = tf.nn.dropout(h_fc1, keep_prob)
+    w_fc2 = weight_variable([1024, 10])
+    bias_fc2 = bias_variable([10])
+    y_out = tf.matmul(h_fc1_dropout, w_fc2)+bias_fc2
+    loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=y_, logits=y_out)) 
+    train_step = tf.train.AdamOptimizer(0.001).minimize(loss)
+    correct_prediction = tf.equal(tf.argmax(y_,1),tf.argmax(y_out,1))
+    accuracy = tf.reduce_mean(tf.cast(correct_prediction,tf.float32))
+    tf.summary.scalar('loss',loss)
+    tf.summary.scalar('accuracy', accuracy)
+    merged = tf.summary.merge_all()
+    sess = tf.Session()
+    sess.run(tf.global_variables_initializer())
+    saver = tf.train.Saver()
+    train_writer = tf.summary.FileWriter(pardir+'/log')
+    y_input,x_input= readData()
+    coder = encoder(y_input,10)
+    train_x,test_x,y_train,y_test = split_train_and_validate(x_input,coder)
+    length = len(train_x)
+    
+    lastacc = 0
+    count = 0
+    for i in range(100):
+        j = 0
+        while(j<length):
+            batch_x=train_x[j:j+batch_size]
+            batch_y = y_train[j:j+batch_size]
+            summary,a,_,loss_= sess.run([merged,accuracy,train_step,loss],feed_dict={x:batch_x,y_:batch_y,keep_prob:0.75})
+            j += batch_size
+        train_writer.add_summary(summary,i)
+        print("epoch "+ str(i)+" train_accuracy :"+str(a))
+        print("epoch "+ str(i)+" loss: "+str(loss_))
+        acc = sess.run(accuracy,feed_dict={x:test_x,y_:y_test,keep_prob:1})
+        print("epoch "+ str(i) + ": "+str(acc))
+        if acc<lastacc:
+            count+=1
+        else:
+            count = 0
+        lastacc = acc
+        if count==3:
+            break
+    train_writer.close()
+    save_path = saver.save(sess, pardir+'/model/cnn.ckpt')       
+    sess.close()
+   
 def modle_predict():
     saver = tf.train.import_meta_graph(pardir+'/model/nn.ckpt.meta')
     sess = tf.Session()
@@ -191,6 +259,6 @@ def modle_predict():
     write_res(predict_)
     
 if __name__=="__main__":
-    MLP()
+    conv()
     # modle_predict()
     
