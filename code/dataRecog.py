@@ -191,6 +191,19 @@ def bn(input, phase):
                                           scope='bn')
     return out
     
+def batchnorm(Ylogits, is_test, offset):
+    y_shape = Ylogits.get_shape()
+    axis = list(range(len(y_shape) - 1))
+
+    exp_moving_avg = tf.train.ExponentialMovingAverage(0.999) # adding the iteration prevents from averaging across non-existing iterations
+    bnepsilon = 1e-5
+    mean, variance = tf.nn.moments(Ylogits, axis)
+    update_moving_everages = exp_moving_avg.apply([mean, variance])#adds shadow copies of trained variables and add ops that maintain a moving average of the trained variables in their shadow copies
+    m = tf.cond(is_test, lambda: exp_moving_avg.average(mean), lambda: mean)#give access to the shadow variables and their names
+    v = tf.cond(is_test, lambda: exp_moving_avg.average(variance), lambda: variance)
+    Ybn = tf.nn.batch_normalization(Ylogits, m, v, offset, None, bnepsilon)
+    return Ybn, update_moving_everages
+    
 def conv():
     x = tf.placeholder(tf.float32,[None,imgsize*imgsize],name = 'x')
     y_ = tf.placeholder(tf.float32,[None, 10],name = 'y')
@@ -198,19 +211,23 @@ def conv():
     x_img = tf.reshape(x,[-1,imgsize,imgsize,1])
     w_conv1 = weight_variable([5,5,1,32]) 
     b_conv1 = bias_variable([32])
-    
-    h_conv1 = tf.nn.relu(bn(conv2d(x_img, w_conv1)+b_conv1, phase))
+    x1bn,update_ema1  = batchnorm(conv2d(x_img, w_conv1), phase, b_conv1)
+    # h_conv1 = tf.nn.relu(bn(conv2d(x_img, w_conv1)+b_conv1, phase))
+    h_conv1 = tf.nn.relu(x1bn)
     h_pool1 = max_pool(h_conv1)
     w_conv2 = weight_variable([5,5,32,64])
     b_conv2 = bias_variable([64])
-    with tf.variable_scope('conv2'):
-        h_conv2 = tf.nn.relu(bn(conv2d(h_pool1, w_conv2)+b_conv2, phase))
+    x2bn,update_ema2  = batchnorm(conv2d(h_pool1, w_conv2), phase, b_conv2)
+    # with tf.variable_scope('conv2'):
+        # h_conv2 = tf.nn.relu(bn(conv2d(h_pool1, w_conv2)+b_conv2, phase))
     h_pool2 = max_pool(h_conv2)
     w_fc1 = weight_variable([7*7*64, 1024])
     b_fc1 = bias_variable([1024])
     h_pool2_flat = tf.reshape(h_pool2, [-1,7*7*64])
-    with tf.variable_scope('fc1'):
-        h_fc1 = tf.nn.relu(bn(tf.matmul(h_pool2_flat, w_fc1)+b_fc1, phase))
+    x3bn,update_ema3 = batchnorm(tf.matmul(h_pool2_flat, w_fc1), phase, b_fc1)
+    update_ema = tf.group(update_ema1, update_ema2, update_ema3)
+    # with tf.variable_scope('fc1'):
+        # h_fc1 = tf.nn.relu(bn(tf.matmul(h_pool2_flat, w_fc1)+b_fc1, phase))
     keep_prob = tf.placeholder(tf.float32)
     h_fc1_dropout = tf.nn.dropout(h_fc1, keep_prob)
     w_fc2 = weight_variable([1024, 10])
@@ -241,13 +258,13 @@ def conv():
             batch_x=train_x[j:j+batch_size]
             batch_y = y_train[j:j+batch_size]
             update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-            with tf.control_dependencies(update_ops):
-                summary,a,_,loss_= sess.run([merged,accuracy,train_step,loss],feed_dict={x:batch_x,y_:batch_y,keep_prob:0.75, phase:1})
+            # with tf.control_dependencies(update_ops):
+            summary,a,_,loss_,_= sess.run([merged,accuracy,train_step,loss,update_ema],feed_dict={x:batch_x,y_:batch_y,keep_prob:0.75, phase:0})
             j += batch_size
         train_writer.add_summary(summary,i)
         print("epoch "+ str(i)+" train_accuracy :"+str(a))
         print("epoch "+ str(i)+" loss: "+str(loss_))
-        acc = sess.run(accuracy,feed_dict={x:test_x,y_:y_test,keep_prob:1,phase:0})
+        acc = sess.run(accuracy,feed_dict={x:test_x,y_:y_test,keep_prob:1,phase:1})
         print("epoch "+ str(i) + ": "+str(acc))
         if acc<lastacc:
             count+=1
