@@ -203,13 +203,14 @@ def conv():
     h_pool1 = max_pool(h_conv1)
     w_conv2 = weight_variable([5,5,32,64])
     b_conv2 = bias_variable([64])
-    tf.get_variable_scope().reuse_variables() 
-    h_conv2 = tf.nn.relu(bn(conv2d(h_pool1, w_conv2)+b_conv2, phase))
+    with tf.variable_scope('conv2'):
+        h_conv2 = tf.nn.relu(bn(conv2d(h_pool1, w_conv2)+b_conv2, phase))
     h_pool2 = max_pool(h_conv2)
     w_fc1 = weight_variable([7*7*64, 1024])
     b_fc1 = bias_variable([1024])
     h_pool2_flat = tf.reshape(h_pool2, [-1,7*7*64])
-    h_fc1 = tf.nn.relu(bn(tf.matmul(h_pool2_flat, w_fc1)+b_fc1, phase))
+    with tf.variable_scope('fc1'):
+        h_fc1 = tf.nn.relu(bn(tf.matmul(h_pool2_flat, w_fc1)+b_fc1, phase))
     keep_prob = tf.placeholder(tf.float32)
     h_fc1_dropout = tf.nn.dropout(h_fc1, keep_prob)
     w_fc2 = weight_variable([1024, 10])
