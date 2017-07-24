@@ -184,27 +184,37 @@ def conv2d(x, W):
 def max_pool(x):
     return tf.nn.max_pool(x, ksize=[1, 2, 2, 1],strides=[1, 2, 2, 1], padding='SAME')
     
+def bn(input, phase):
+    out = tf.contrib.layers.batch_norm(input, 
+                                          center=True, scale=True, 
+                                          is_training=phase,
+                                          scope='bn')
+    return out
+    
 def conv():
     x = tf.placeholder(tf.float32,[None,imgsize*imgsize],name = 'x')
     y_ = tf.placeholder(tf.float32,[None, 10],name = 'y')
+    phase = tf.placeholder(tf.bool, name="phase")
     x_img = tf.reshape(x,[-1,imgsize,imgsize,1])
     w_conv1 = weight_variable([5,5,1,32]) 
     b_conv1 = bias_variable([32])
-    h_conv1 = tf.nn.relu(conv2d(x_img, w_conv1)+b_conv1)
+    
+    h_conv1 = tf.nn.relu(bn(conv2d(x_img, w_conv1)+b_conv1, phase))
     h_pool1 = max_pool(h_conv1)
     w_conv2 = weight_variable([5,5,32,64])
     b_conv2 = bias_variable([64])
-    h_conv2 = tf.nn.relu(conv2d(h_pool1, w_conv2)+b_conv2)
+    h_conv2 = tf.nn.relu(bn(conv2d(h_pool1, w_conv2)+b_conv2, phase))
     h_pool2 = max_pool(h_conv2)
     w_fc1 = weight_variable([7*7*64, 1024])
     b_fc1 = bias_variable([1024])
     h_pool2_flat = tf.reshape(h_pool2, [-1,7*7*64])
-    h_fc1 = tf.nn.relu(tf.matmul(h_pool2_flat, w_fc1)+b_fc1)
+    h_fc1 = tf.nn.relu(bn(tf.matmul(h_pool2_flat, w_fc1)+b_fc1, phase))
     keep_prob = tf.placeholder(tf.float32)
     h_fc1_dropout = tf.nn.dropout(h_fc1, keep_prob)
     w_fc2 = weight_variable([1024, 10])
     bias_fc2 = bias_variable([10])
     y_out = tf.matmul(h_fc1_dropout, w_fc2)+bias_fc2
+    y_res = tf.argmax(y_out,1,name = 'predict')
     loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=y_, logits=y_out)) 
     train_step = tf.train.AdamOptimizer(0.001).minimize(loss)
     correct_prediction = tf.equal(tf.argmax(y_,1),tf.argmax(y_out,1))
@@ -223,17 +233,19 @@ def conv():
     
     lastacc = 0
     count = 0
-    for i in range(100):
+    for i in range(30):
         j = 0
         while(j<length):
             batch_x=train_x[j:j+batch_size]
             batch_y = y_train[j:j+batch_size]
-            summary,a,_,loss_= sess.run([merged,accuracy,train_step,loss],feed_dict={x:batch_x,y_:batch_y,keep_prob:0.75})
+            update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+            with tf.control_dependencies(update_ops):
+                summary,a,_,loss_= sess.run([merged,accuracy,train_step,loss],feed_dict={x:batch_x,y_:batch_y,keep_prob:0.75, phase:1})
             j += batch_size
         train_writer.add_summary(summary,i)
         print("epoch "+ str(i)+" train_accuracy :"+str(a))
         print("epoch "+ str(i)+" loss: "+str(loss_))
-        acc = sess.run(accuracy,feed_dict={x:test_x,y_:y_test,keep_prob:1})
+        acc = sess.run(accuracy,feed_dict={x:test_x,y_:y_test,keep_prob:1,phase:0})
         print("epoch "+ str(i) + ": "+str(acc))
         if acc<lastacc:
             count+=1
@@ -247,9 +259,9 @@ def conv():
     sess.close()
    
 def modle_predict():
-    saver = tf.train.import_meta_graph(pardir+'/model/nn.ckpt.meta')
+    saver = tf.train.import_meta_graph(pardir+'/model/cnn.ckpt.meta')
     sess = tf.Session()
-    saver.restore(sess,pardir+'/model/nn.ckpt')
+    saver.restore(sess,pardir+'/model/cnn.ckpt')
     graph = tf.get_default_graph()
     predict = graph.get_tensor_by_name("predict:0")
     x = graph.get_tensor_by_name("x:0")
