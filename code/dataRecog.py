@@ -203,6 +203,7 @@ def conv():
     h_pool1 = max_pool(h_conv1)
     w_conv2 = weight_variable([5,5,32,64])
     b_conv2 = bias_variable([64])
+    tf.get_variable_scope().reuse_variables() 
     h_conv2 = tf.nn.relu(bn(conv2d(h_pool1, w_conv2)+b_conv2, phase))
     h_pool2 = max_pool(h_conv2)
     w_fc1 = weight_variable([7*7*64, 1024])
