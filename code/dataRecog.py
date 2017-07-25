@@ -219,7 +219,8 @@ def conv():
     b_conv2 = bias_variable([64])
     x2bn,update_ema2  = batchnorm(conv2d(h_pool1, w_conv2), phase, b_conv2)
     # with tf.variable_scope('conv2'):
-        # h_conv2 = tf.nn.relu(bn(conv2d(h_pool1, w_conv2)+b_conv2, phase))
+    #h_conv2 = tf.nn.relu(bn(conv2d(h_pool1, w_conv2)+b_conv2, phase))
+    h_conv2 = tf.nn.relu(x2bn)
     h_pool2 = max_pool(h_conv2)
     w_fc1 = weight_variable([7*7*64, 1024])
     b_fc1 = bias_variable([1024])
@@ -228,7 +229,8 @@ def conv():
     update_ema = tf.group(update_ema1, update_ema2, update_ema3)
     # with tf.variable_scope('fc1'):
         # h_fc1 = tf.nn.relu(bn(tf.matmul(h_pool2_flat, w_fc1)+b_fc1, phase))
-    keep_prob = tf.placeholder(tf.float32)
+    h_fc1 = tf.nn.relu(x3bn)
+    keep_prob = tf.placeholder(tf.float32,name='prob')
     h_fc1_dropout = tf.nn.dropout(h_fc1, keep_prob)
     w_fc2 = weight_variable([1024, 10])
     bias_fc2 = bias_variable([10])
