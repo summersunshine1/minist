@@ -288,7 +288,8 @@ def modle_predict():
     x = graph.get_tensor_by_name("x:0")
     x_input = readTestData()
     prob = graph.get_tensor_by_name("prob:0")
-    predict_ = sess.run(predict, feed_dict={x:x_input,prob:1})
+    phase = graph.get_tensor_by_name("phase:0")
+    predict_ = sess.run(predict, feed_dict={x:x_input,prob:1,phase:1})
     write_res(predict_)
     
 if __name__=="__main__":
