@@ -261,7 +261,7 @@ def conv():
             batch_y = y_train[j:j+batch_size]
             update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
             # with tf.control_dependencies(update_ops):
-            summary,a,_,loss_,_= sess.run([merged,accuracy,train_step,loss,update_ema],feed_dict={x:batch_x,y_:batch_y,keep_prob:0.75, phase:0})
+            summary,a,_,loss_,_= sess.run([merged,accuracy,train_step,loss,update_ema],feed_dict={x:batch_x,y_:batch_y,keep_prob:0.5, phase:0})
             j += batch_size
         train_writer.add_summary(summary,i)
         print("epoch "+ str(i)+" train_accuracy :"+str(a))
